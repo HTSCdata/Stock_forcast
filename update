@@ -1,0 +1,65 @@
+from WindPy import w
+import pandas as pd
+import numpy as np
+import math
+import warnings
+warnings.filterwarnings('ignore')
+import os
+import time
+from tqdm import tqdm
+os.chdir(r'E:\myPython\HTSC\JQData')
+date = time.strftime("%Y-%m-%d", time.localtime())
+
+w.start()
+wsetdata = w.wset('SectorConstituent', 'date='+date+';sectorId=a001010100000000;field=wind_code')
+stock_list = wsetdata.Data[0]
+trade_list = ['open', 'high', 'low', 'close', 'volume', 'amt']
+
+start_date = "2016-01-01"
+end_date = "2018-08-30"
+# 获得每支股票的数据
+for name in stock_list:
+    a = w.wsd(name, trade_list, start_date, end_date)
+    df = pd.DataFrame(a.Data).T
+    df.index = a.Times
+    df.columns = trade_list
+    df.to_hdf('test1', key=name)
+    print('The {:s} has been finished!'.format(name))
+
+
+# Convert
+hdf_temp = pd.HDFStore(r'E:\myPython\HTSC\JQData\test1')
+column_list = trade_list
+for name in column_list:
+    new_security = []
+    a = np.zeros((len(hdf_temp.get('000001.SZ')), 1))
+    for i in tqdm(range(0, len(stock_list))):
+        df = hdf_temp.get(stock_list[i])
+        a = np.concatenate([a, df[[name]].values], axis=1)
+        print(str(i)+'/3539'+'get stock ' + stock_list[i])
+
+    data = pd.DataFrame(a[:, 1:], index=hdf_temp.get(stock_list[i]).index, columns=stock_list)
+    data.to_hdf('new_hdf', key=name)
+
+
+# Update
+new_date = time.strftime("%Y-%m-%d", time.localtime())
+old = pd.HDFStore(r'E:\myPython\HTSC\JQData\test1')
+for name in stock_list:
+    new = w.wsd(name, trade_list, new_date, "")
+    df_new = pd.DataFrame(new.Data).T
+    df_new.index = df_new.Times
+    df_new.columns = trade_list
+
+# for i in trade_list:
+
+data_new = []
+for i in range(math.ceil(len(stock_list)/100)):
+    if i < math.floor(len(stock_list)/100):
+        new = w.wsd(stock_list[i*100: (i+1)*100], "open", new_date)
+        data_new.extend(new.Data[0])
+    else:
+        new = w.wsd(stock_list[i*100: len(stock_list)], "open", new_date)
+        data_new.extend(new.Data[0])
+
+df_new = pd.DataFrame(np.array([data_new]), index=new.Times, columns=stock_list)
